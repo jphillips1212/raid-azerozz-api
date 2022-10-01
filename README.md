@@ -1,0 +1,1 @@
+Currently loops over recent kills for hardcoded Sire Denathrius encounter and prints healer composition for each
