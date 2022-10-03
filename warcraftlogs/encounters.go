@@ -42,7 +42,7 @@ type KillDetails struct {
 }
 
 // GetReportsForEncounter returns a slice of killdetails for the provided encounter
-func (c Client) GetReportsForEncounter(fightId int) ([]KillDetails, error) {
+func (c Client) GenerateReportsForEncounter(fightId int, encounterReports chan<- KillDetails, n chan<- int) {
 	var query QueryFightByID
 	variables := map[string]any{
 		"id": graphql.Int(fightId),
@@ -50,28 +50,33 @@ func (c Client) GetReportsForEncounter(fightId int) ([]KillDetails, error) {
 
 	err := c.Client.Query(context.Background(), &query, variables)
 	if err != nil {
-		return nil, err
+		fmt.Printf("Error querying warcraftLogs for encounter: [%d]\n", fightId)
 	}
 
-	var killDetails []KillDetails
+	// Hardcode to wait on ten reports
+	fmt.Printf("Waitgroup count is %d\n", query.WorldData.Encounter.FightRankings.Count)
+	n <- 10
 
-	// Hardcoded to only loop over first five reports to not hit rate limit
+	// Hardcoded to only loop over first ten reports to not hit rate limit
 	//for _, encounter := range query.WorldData.Encounter.FightRankings.Rankings {
-	for i := 0; i < 5; i++ {
-		encounter := query.WorldData.Encounter.FightRankings.Rankings[i] // Remove when putting back for range loop
+	for i := 0; i < 10; i++ {
+		go func(i int, ch chan<- KillDetails) {
+			encounter := query.WorldData.Encounter.FightRankings.Rankings[i] // Remove when putting back for range loop
 
-		fightTimes, err := c.GetFightTimes(encounter.Report.Code, encounter.Report.FightID)
-		if err != nil {
-			fmt.Printf("error returning fight times for report [%s] for fight ID [%d]: [%v]\n", encounter.Report.Code, fightId, err)
-		}
+			fightTimes, err := c.GetFightTimes(encounter.Report.Code, encounter.Report.FightID)
+			if err != nil {
+				fmt.Printf("error returning fight times for report [%s] for fight ID [%d]: [%v]\n", encounter.Report.Code, fightId, err)
+				ch <- KillDetails{}
+				return
+			}
 
-		killDetails = append(killDetails, KillDetails{
-			Code:      encounter.Report.Code,
-			FightID:   encounter.Report.FightID,
-			StartTime: fightTimes.StartTime,
-			EndTime:   fightTimes.EndTime,
-		})
+			ch <- KillDetails{
+				Code:      encounter.Report.Code,
+				FightID:   encounter.Report.FightID,
+				StartTime: fightTimes.StartTime,
+				EndTime:   fightTimes.EndTime,
+			}
+
+		}(i, encounterReports)
 	}
-
-	return killDetails, nil
 }
