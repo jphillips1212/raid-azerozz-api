@@ -2,7 +2,6 @@ package warcraftlogs
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/hasura/go-graphql-client"
 )
@@ -16,7 +15,7 @@ type QueryFightByID struct {
 				Page     int
 				Count    int
 				Rankings []Rankings
-			} `scalar:"true"`
+			} `graphql:"fightRankings(page: $page)" scalar:"true"`
 		} `graphql:"encounter(id: $id)"`
 	}
 }
@@ -35,16 +34,17 @@ type Report struct {
 }
 
 // GetReportsForEncounter returns a slice of killdetails for the provided encounter
-func (c Client) GenerateReportsForEncounter(fightId int) *QueryFightByID {
+func (c Client) GenerateReportsForEncounter(fightId, page int) (*QueryFightByID, error) {
 	var query QueryFightByID
 	variables := map[string]any{
-		"id": graphql.Int(fightId),
+		"id":   graphql.Int(fightId),
+		"page": graphql.Int(page),
 	}
 
 	err := c.Client.Query(context.Background(), &query, variables)
 	if err != nil {
-		fmt.Printf("Error querying warcraftLogs for encounter: [%d]\n", fightId)
+		return &QueryFightByID{}, err
 	}
 
-	return &query
+	return &query, nil
 }

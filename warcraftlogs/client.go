@@ -12,14 +12,16 @@ type Client struct {
 }
 
 // New return a new graphql client for calling warcraft logs
-func New() *graphql.Client {
+func New() *Client {
 	conf := clientcredentials.Config{
-		ClientID:     "",
+		ClientID:     "9761af97-7dc0-4f3e-b1d4-f9744af50f2e",
 		ClientSecret: "",
-		TokenURL:     "https://www.warcraftlogs.com/oauth/token",
+		TokenURL:     "",
 	}
 
 	httpClient := conf.Client(context.Background())
 
-	return graphql.NewClient("https://www.warcraftlogs.com/api/v2/client", httpClient)
+	return &Client{
+		graphql.NewClient("https://www.warcraftlogs.com/api/v2/client", httpClient),
+	}
 }

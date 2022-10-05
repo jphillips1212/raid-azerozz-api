@@ -4,30 +4,22 @@ import (
 	"fmt"
 	"sync"
 
+	fs "github.com/jphillips1212/roztools-api/firestore"
 	wl "github.com/jphillips1212/roztools-api/warcraftlogs"
 )
 
-type HealerDetails struct {
-	FightID   int
-	Report    string
+type killAnalysis struct {
+	Error     error
 	StartTime int
 	EndTime   int
-	Healers   []Healer
+
+	Report wl.Report
 }
 
-type Healer struct {
-	Name  string
-	Class string
-	Spec  string
-}
-
-type KillAnalysis struct {
+type healerAnalysis struct {
 	Error error
 
-	Code      string
-	FightID   int
-	StartTime int
-	EndTime   int
+	HealerDetails fs.HealerDetails
 }
 
 // GenerateHealerCompositions generates a list of healer compositions for the provided encounter id
@@ -37,83 +29,103 @@ type KillAnalysis struct {
 //
 // Persisting the reports will generate a lot of requests and should only be used when generating reports for a fight for the first time
 func GenerateHealerCompositions(encounterID int, persist bool) {
-	client := wl.Client{
-		Client: wl.New(),
-	}
+	wl := wl.New()
+	fs := fs.New()
 
-	query := *client.GenerateReportsForEncounter(encounterID)
-	dataChan := make(chan KillAnalysis)
+	reportChan := make(chan killAnalysis)
+	healerChan := make(chan healerAnalysis)
 	wg := sync.WaitGroup{}
 
-	// Hardcoded to only loop over first ten reports to not hit rate limit
-	//for _, encounter := range query.WorldData.Encounter.FightRankings.Rankings {
-	for i := 0; i < 10; i++ {
-		encounter := query.WorldData.Encounter.FightRankings.Rankings[i]
+	// Loop through five pages of reports
+	for i := 1; i <= 5; i++ {
+		query, err := wl.GenerateReportsForEncounter(encounterID, i)
+		if err != nil {
+			fmt.Println("Error querying warcraft logs, abandoning further queries")
+			return
+		}
+		encounterName := fmt.Sprintf("%s", query.WorldData.Encounter.Name)
+		fmt.Printf("\n_____Starting analysis for encounter %s on page %d_____\n", encounterName, i)
 
-		// Check for if this fightID and report has already been analysed
-		if (encounter.Report.Code == "27PJCZVx6pb3qmDQ" && encounter.Report.FightID == 33) ||
-			(encounter.Report.Code == "XjJx2MTqaVCNwYbt" && encounter.Report.FightID == 52) { // Hardcode to mimic report being found
-			fmt.Printf("Report %s for fight %d has already been analysed, skipping analysis for this fight\n", encounter.Report.Code, encounter.Report.FightID)
-			if !persist {
-				fmt.Printf("Persist is not set, abandoning rest of reports for boss %d\n", encounterID)
-				break
+		for _, encounter := range query.WorldData.Encounter.FightRankings.Rankings {
+
+			// Check for if this fightID and report has already been analysed
+			if fs.DoesReportExists(encounter.Report.Code, encounterName, encounter.Report.FightID) {
+				fmt.Printf("Report %s for fight %d has already been analysed, skipping analysis for this fight\n", encounter.Report.Code, encounter.Report.FightID)
+				if !persist {
+					fmt.Printf("Persist is not set, abandoning rest of reports for boss %d\n", encounterID)
+					break
+				}
+			} else {
+				wg.Add(3)
+				go generateReportForEncounter(wl, encounter, reportChan, &wg)
+				go generateHealerComposition(wl, reportChan, healerChan, &wg)
+				go saveHealerComposition(fs, encounterName, healerChan, &wg)
 			}
-		} else {
-			wg.Add(1)
-			go generateReportForEncounter(&client, encounter, dataChan)
-			go listenForEncounterReport(&client, dataChan, &wg)
 		}
 	}
 
 	wg.Wait()
-	close(dataChan)
+	close(reportChan)
+	close(healerChan)
 }
 
-func generateReportForEncounter(client *wl.Client, encounter wl.Rankings, dataChan chan<- KillAnalysis) {
+func generateReportForEncounter(client *wl.Client, encounter wl.Rankings, reportChan chan<- killAnalysis, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// Get Fight Times for the encounter for use later
 	fightTimes, err := client.GetFightTimes(encounter.Report.Code, encounter.Report.FightID)
 	if err != nil {
-		dataChan <- KillAnalysis{
-			Error:   err,
-			Code:    encounter.Report.Code,
-			FightID: encounter.Report.FightID,
+		reportChan <- killAnalysis{
+			Error: err,
+			Report: wl.Report{
+				Code:    encounter.Report.Code,
+				FightID: encounter.Report.FightID,
+			},
 		}
 		return
 	}
 
-	dataChan <- KillAnalysis{
-		Code:      encounter.Report.Code,
-		FightID:   encounter.Report.FightID,
+	reportChan <- killAnalysis{
+		Report: wl.Report{
+			Code:    encounter.Report.Code,
+			FightID: encounter.Report.FightID,
+		},
 		StartTime: fightTimes.StartTime,
 		EndTime:   fightTimes.EndTime,
 	}
 }
 
-func listenForEncounterReport(client *wl.Client, ch chan KillAnalysis, wg *sync.WaitGroup) {
-	report := <-ch
+func generateHealerComposition(client *wl.Client, reportChan <-chan killAnalysis, healerChan chan<- healerAnalysis, wg *sync.WaitGroup) {
+	defer wg.Done()
+	report := <-reportChan
 	if report.Error != nil {
-		fmt.Printf("error returning fight times for report [%s] for fight ID [%d]: [%v]\n", report.Code, report.FightID, report.Error)
-		wg.Done()
+		healerChan <- healerAnalysis{
+			Error: fmt.Errorf("error returning fight times for report [%s] for fight ID [%d]: [%v]\n",
+				report.Report.Code, report.Report.FightID, report.Error),
+			HealerDetails: fs.HealerDetails{
+				Report:  report.Report.Code,
+				FightID: report.Report.FightID,
+			},
+		}
 		return
 	}
 
-	comp, err := client.GetEncounterComposition(report.Code, report.FightID, report.StartTime, report.EndTime)
+	comp, err := client.GetEncounterComposition(report.Report.Code, report.Report.FightID, report.StartTime, report.EndTime)
 	if err != nil {
-		fmt.Printf("error returning healer composition for report %s for fight id %d: [%v] - abandoning generating healer comp for this fight\n", report.Code, report.FightID, err)
-		wg.Done()
+		healerChan <- healerAnalysis{
+			Error: fmt.Errorf("error returning healer composition for report %s for fight id %d: [%v] - abandoning generating healer comp for this fight\n",
+				report.Report.Code, report.Report.FightID, err),
+			HealerDetails: fs.HealerDetails{
+				Report:  report.Report.Code,
+				FightID: report.Report.FightID,
+			},
+		}
 		return
 	}
 
-	healerDetails := HealerDetails{
-		FightID:   report.FightID,
-		Report:    report.Code,
-		StartTime: report.StartTime,
-		EndTime:   report.EndTime,
-	}
-
+	healers := []fs.Healer{}
 	for _, actor := range comp {
 		if actor.Role == "healer" {
-			healerDetails.Healers = append(healerDetails.Healers, Healer{
+			healers = append(healers, fs.Healer{
 				Name:  actor.Name,
 				Class: actor.Class,
 				Spec:  actor.Spec,
@@ -121,6 +133,35 @@ func listenForEncounterReport(client *wl.Client, ch chan KillAnalysis, wg *sync.
 		}
 	}
 
-	fmt.Println(healerDetails)
-	wg.Done()
+	healerChan <- healerAnalysis{
+		HealerDetails: fs.HealerDetails{
+			Report:    report.Report.Code,
+			FightID:   report.Report.FightID,
+			StartTime: report.StartTime,
+			EndTime:   report.EndTime,
+			Healers:   healers,
+		},
+	}
+
+	fmt.Printf("Finished analysis for report %s\n", report.Report.Code)
+
+	return
+}
+
+func saveHealerComposition(client *fs.Client, encounterName string, ch chan healerAnalysis, wg *sync.WaitGroup) {
+	defer wg.Done()
+	healerComp := <-ch
+
+	if healerComp.Error != nil {
+		fmt.Printf("error generating healer composition [%v]\n", healerComp.Error)
+		return
+	}
+
+	err := client.SaveHealerComposition(encounterName, healerComp.HealerDetails)
+	if err != nil {
+		fmt.Printf("error saving healing composition to database [%v]\n", err)
+		return
+	}
+
+	return
 }
