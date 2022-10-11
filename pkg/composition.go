@@ -37,13 +37,13 @@ func GenerateHealerCompositions(encounterID int, persist bool) {
 	wg := sync.WaitGroup{}
 
 	// Loop through five pages of reports
-	for i := 1; i <= 5; i++ {
+	for i := 0; i <= 5; i++ {
 		query, err := wl.GenerateReportsForEncounter(encounterID, i)
 		if err != nil {
-			fmt.Println("Error querying warcraft logs, abandoning further queries")
-			return
+			fmt.Printf("\nError querying warcraft logs, abandoning further queries\n %v", err)
+			break
 		}
-		encounterName := fmt.Sprintf("%s", query.WorldData.Encounter.Name)
+		encounterName := string(query.WorldData.Encounter.Name)
 		fmt.Printf("\n_____Starting analysis for encounter %s on page %d_____\n", encounterName, i)
 
 		for _, encounter := range query.WorldData.Encounter.FightRankings.Rankings {
@@ -99,7 +99,7 @@ func generateHealerComposition(client *wl.Client, reportChan <-chan killAnalysis
 	report := <-reportChan
 	if report.Error != nil {
 		healerChan <- healerAnalysis{
-			Error: fmt.Errorf("error returning fight times for report [%s] for fight ID [%d]: [%v]\n",
+			Error: fmt.Errorf("error returning fight times for report [%s] for fight ID [%d]: [%v]",
 				report.Report.Code, report.Report.FightID, report.Error),
 			HealerDetails: fs.HealerDetails{
 				Report:  report.Report.Code,
@@ -112,7 +112,7 @@ func generateHealerComposition(client *wl.Client, reportChan <-chan killAnalysis
 	comp, err := client.GetEncounterComposition(report.Report.Code, report.Report.FightID, report.StartTime, report.EndTime)
 	if err != nil {
 		healerChan <- healerAnalysis{
-			Error: fmt.Errorf("error returning healer composition for report %s for fight id %d: [%v] - abandoning generating healer comp for this fight\n",
+			Error: fmt.Errorf("error returning healer composition for report %s for fight id %d: [%v] - abandoning generating healer comp for this fight",
 				report.Report.Code, report.Report.FightID, err),
 			HealerDetails: fs.HealerDetails{
 				Report:  report.Report.Code,
@@ -144,8 +144,6 @@ func generateHealerComposition(client *wl.Client, reportChan <-chan killAnalysis
 	}
 
 	fmt.Printf("Finished analysis for report %s\n", report.Report.Code)
-
-	return
 }
 
 func saveHealerComposition(client *fs.Client, encounterName string, ch chan healerAnalysis, wg *sync.WaitGroup) {
@@ -162,6 +160,4 @@ func saveHealerComposition(client *fs.Client, encounterName string, ch chan heal
 		fmt.Printf("error saving healing composition to database [%v]\n", err)
 		return
 	}
-
-	return
 }

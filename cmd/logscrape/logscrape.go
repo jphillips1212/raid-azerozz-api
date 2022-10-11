@@ -10,8 +10,8 @@ import (
 func main() {
 	start := time.Now()
 	// Hardcoded to Sire Denathrius
-	pkg.GenerateHealerCompositions(2407, false)
+	pkg.GenerateHealerCompositions(2417, false)
 
 	elapsed := time.Since(start)
-	fmt.Printf("Total time to run: %s", elapsed)
+	fmt.Printf("Total time to run: %s\n", elapsed)
 }

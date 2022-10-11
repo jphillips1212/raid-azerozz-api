@@ -43,3 +43,27 @@ func (c Client) DoesReportExists(reportCode, encounterName string, fightID int) 
 
 	return true
 }
+
+func (c Client) ReturnAllHealerComps(encounterName string) ([]HealerDetails, error) {
+	var healerDetails []HealerDetails
+	iter := c.Client.Collection("Reports").Doc(encounterName).Collection("HealerComp").Documents(*c.Ctx)
+	defer iter.Stop()
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return []HealerDetails{}, fmt.Errorf("error iterating through documents for %s: %v", encounterName, err)
+		}
+
+		var healerComp HealerDetails
+		if err := doc.DataTo(&healerComp); err != nil {
+			return []HealerDetails{}, fmt.Errorf("error converting healer comp from database to struct for %s: %v", encounterName, err)
+		}
+
+		healerDetails = append(healerDetails, healerComp)
+	}
+
+	return healerDetails, nil
+}
