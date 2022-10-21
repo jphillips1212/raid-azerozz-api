@@ -2,6 +2,8 @@ module github.com/jphillips1212/roztools-api
 
 go 1.19
 
+require github.com/go-chi/chi v1.5.4
+
 require (
 	cloud.google.com/go v0.104.0 // indirect
 	cloud.google.com/go/compute v1.7.0 // indirect

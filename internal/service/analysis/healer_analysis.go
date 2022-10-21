@@ -7,13 +7,12 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	firestore "github.com/jphillips1212/roztools-api/firestore"
+	model "github.com/jphillips1212/roztools-api/model"
 )
 
-func AnalyseHealerComp(encounter string) {
-	fs := firestore.New()
+func (analysis Analysis) SaveHealerAnalysis(encounterName string) {
 
-	healerComps, err := fs.ReturnAllHealerComps(encounter)
+	healerComps, err := analysis.Database.GetAllHealerCompositions(encounterName)
 	if err != nil {
 		fmt.Printf("Error returning healer comp [%v]\n", err)
 		return
@@ -24,15 +23,15 @@ func AnalyseHealerComp(encounter string) {
 	wg := sync.WaitGroup{}
 	for _, healerFrequency := range healerFrequencies {
 		wg.Add(1)
-		go fs.SaveHealerAnalysis(encounter, healerFrequency.HealerKey, healerFrequency, &wg)
+		go analysis.Database.SaveHealerFrequencies(encounterName, healerFrequency.HealerKey, healerFrequency, &wg)
 	}
 
 	wg.Wait()
 
-	fmt.Printf("\nHealer frequencies have been saved for %s, total of %d encounters\n", encounter, len(healerComps))
+	fmt.Printf("\nHealer frequencies have been saved for %s, total of %d encounters\n", encounterName, len(healerComps))
 }
 
-func findFrequencyOfHealers(healerComps []firestore.HealerDetails) []firestore.HealerFrequency {
+func findFrequencyOfHealers(healerComps []model.HealerDetails) []model.HealerFrequency {
 	frequency := make(map[string]int)
 
 	// Calculate frequency using healerKey
@@ -45,13 +44,13 @@ func findFrequencyOfHealers(healerComps []firestore.HealerDetails) []firestore.H
 		}
 	}
 
-	var healerFrequencies []firestore.HealerFrequency
+	var healerFrequencies []model.HealerFrequency
 
 	// Convert frequency with healerKey into struct
 	for healerKey, count := range frequency {
 		healers := strings.Split(healerKey, ":")
 
-		healerFrequency := firestore.HealerFrequency{
+		healerFrequency := model.HealerFrequency{
 			Frequency: count,
 			HealerKey: healerKey,
 			Healers:   healers,
@@ -69,7 +68,7 @@ func findFrequencyOfHealers(healerComps []firestore.HealerDetails) []firestore.H
 }
 
 // Generates a string that acts as a key for that specific composition of healers
-func generateHealerKey(healerComp []firestore.Healer) string {
+func generateHealerKey(healerComp []model.Healer) string {
 	// Generate string slice of all healers
 	var healers []string
 	for _, h := range healerComp {

@@ -34,7 +34,7 @@ type Report struct {
 }
 
 // GetReportsForEncounter returns a slice of killdetails for the provided encounter
-func (c Client) GenerateReportsForEncounter(fightId, page int) (*QueryFightByID, error) {
+func (c Client) GetReportsForEncounter(fightId, page int) (*QueryFightByID, error) {
 	var query QueryFightByID
 	variables := map[string]any{
 		"id":   graphql.Int(fightId),
