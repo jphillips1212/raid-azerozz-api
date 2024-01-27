@@ -12,5 +12,5 @@ type Handler struct {
 }
 
 type Service struct {
-	Service svc.Service
+	svc.Service
 }

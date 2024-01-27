@@ -9,20 +9,22 @@ import (
 
 // RozTools declares the tooling used to create analysis, database and logstore.
 type Api interface {
-	// Analysis
-	GetHealerFrequency(w http.ResponseWriter, r *http.Request)
+	// Generate DB
+	GenerateEncounterData(w http.ResponseWriter, r *http.Request)
 
-	// Generate
-	GenerateHealerComposition(w http.ResponseWriter, r *http.Request)
+	// Return DB
+	GetHealerFrequency(w http.ResponseWriter, r *http.Request)
 }
 
 func Register(api Api) {
 	router := chi.NewRouter()
 
 	router.Route("/", func(r chi.Router) {
-		router.Get("/encounter/{encounterName}/healer-frequency", api.GetHealerFrequency)
+		// Generate and save data and analysis to DB from WarcraftLogs
+		router.Post("/generate/encounter", api.GenerateEncounterData)
 
-		router.Post("/generate/healers", api.GenerateHealerComposition)
+		// Return data from DB to consumer
+		router.Get("/encounter/{encounterName}/healer-frequency", api.GetHealerFrequency)
 	})
 
 	fmt.Println("Registering router...")

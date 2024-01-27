@@ -2,8 +2,8 @@ package service
 
 type Service interface {
 	// Analysis
-	SaveHealerAnalysis(encounterName string)
+	AnalyseAndSaveBoss(encounterID int)
 
 	// Logscrape
-	SaveHealerLogs(encounterName string, persist bool) error
+	ScrapeAndSaveBoss(encounterID int, persist bool)
 }

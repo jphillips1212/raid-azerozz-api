@@ -8,10 +8,12 @@ import (
 
 // DB interface declares how to interact with underlying database technology
 type DB interface {
-	SaveHealerFrequencies(encounterName, healerKey string, healerFrequency model.HealerFrequency, wg *sync.WaitGroup)
-	GetHealerFrequencies(encounterName string) ([]model.HealerFrequency, error)
-
-	SaveHealerComposition(encounterName string, healerDetails model.HealerDetails) error
 	GetIfReportExists(reportCode, encounterName string, fightID int) bool
-	GetAllHealerCompositions(encounterName string) ([]model.HealerDetails, error)
+	GetIfMaxReportsForEncounter(encounterID int) bool
+	GetAllEncounters(encounterName string) ([]model.EncounterData, error)
+
+	SaveHealerFrequencies(encounterName, healerKey string, healerFrequency model.RoleFrequency, wg *sync.WaitGroup)
+	GetHealerFrequencies(encounterName string) ([]model.RoleFrequency, error)
+
+	SaveEncounterData(encounterName string, encounterData model.EncounterData) error
 }

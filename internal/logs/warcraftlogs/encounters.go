@@ -26,11 +26,18 @@ type Zone struct {
 
 type Rankings struct {
 	Report Report `json:"report"`
+	Guild  Guild  `json:"guild"`
 }
 
 type Report struct {
 	Code    string `json:"code"`
 	FightID int    `json:"fightID"`
+}
+
+type Guild struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Faction int    `json:"faction"`
 }
 
 // GetReportsForEncounter returns a slice of killdetails for the provided encounter
